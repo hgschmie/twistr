@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE log4j:configuration SYSTEM "log4j.dtd">
+<log4j:configuration
+    xmlns:log4j="http://jakarta.apache.org/log4j/"
+    threshold="trace">
+  <!-- the threshold level above sets the global logging cutoff -->
+  <!-- configure console logging -->
+
+  <appender name="CONSOLE" class="org.apache.log4j.ConsoleAppender">
+    <param name="threshold" value="trace" />
+    <layout class="org.apache.log4j.PatternLayout">
+      <param name="ConversionPattern" value="%p	&lt;%X{track}&gt;	%d{ISO8601}	%t	%c	%m%n" />
+    </layout>
+  </appender>
+
+  <!-- We don't use JAXB support and it whines an awful lot.  BK-257 -->
+  <logger name="com.sun.jersey.server.wadl.generators.WadlGeneratorJAXBGrammarGenerator">
+    <level value="fatal" />
+  </logger>
+
+  <logger name="ness">
+    <level value="debug" />
+  </logger>
+  <logger name="com.nesscomputing">
+    <level value="debug" />
+  </logger>
+
+  <!--  set the root loggers -->
+  <root>
+    <level value="info" />
+    <appender-ref ref="CONSOLE" />
+  </root>
+
+</log4j:configuration>
