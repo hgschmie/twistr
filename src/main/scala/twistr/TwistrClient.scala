@@ -1,42 +1,49 @@
+/**
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package twistr
 
-import java.io.BufferedReader
-import java.io.Closeable
-import java.io.InputStreamReader
+import java.io.{BufferedReader, Closeable, InputStreamReader}
 import java.net.URL
 import java.nio.charset.StandardCharsets
 import java.util.Properties
 import java.util.concurrent.Executors
+
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.google.common.hash.{BloomFilter, PrimitiveSink, Funnel}
+import com.google.common.hash.{BloomFilter, Funnel, PrimitiveSink}
 import com.google.common.util.concurrent.ThreadFactoryBuilder
 import com.google.inject.Inject
+import com.nesscomputing.lifecycle.LifecycleStage
 import com.nesscomputing.lifecycle.guice.OnStage
 import com.nesscomputing.logging.Log
 import com.squareup.okhttp.OkHttpClient
-import kafka.producer.KeyedMessage
-import kafka.producer.Producer
-import kafka.producer.ProducerConfig
-import oauth.signpost.basic.DefaultOAuthConsumer
-import com.nesscomputing.lifecycle.LifecycleStage
-import twistr.TwistrClient._
+import kafka.producer.{KeyedMessage, Producer, ProducerConfig}
 import kafka.serializer.StringEncoder
-import scala.collection.JavaConverters._
+import oauth.signpost.basic.DefaultOAuthConsumer
+import twistr.TwistrClient._
+
 object TwistrClient {
   private val LOG = Log.findLog
   val MAX_TWEETS = 500000
 }
 
-class TwistrClient @Inject() (config: TwistrConfig, objectMapper: ObjectMapper) extends Runnable
-{
+class TwistrClient @Inject()(config: TwistrConfig, objectMapper: ObjectMapper) extends Runnable {
   @volatile private var running = true
   private val executor = Executors.newFixedThreadPool(1, (new ThreadFactoryBuilder).setNameFormat("twitter-pipe-%s").setDaemon(false).build)
   private val consumer = new DefaultOAuthConsumer(config.getConsumerKey(), config.getConsumerSecret())
 
-  private val idFunnel = new Funnel[Long]
-  {
-    def funnel(value: Long, into: PrimitiveSink)
-    {
+  private val idFunnel = new Funnel[Long] {
+    def funnel(value: Long, into: PrimitiveSink) {
       into.putLong(value)
     }
   }
@@ -55,14 +62,12 @@ class TwistrClient @Inject() (config: TwistrConfig, objectMapper: ObjectMapper) 
   private val producerConfig = new ProducerConfig(props)
 
   @OnStage(LifecycleStage.START)
-  def start()
-  {
+  def start() {
     executor.submit(this)
   }
 
   @OnStage(LifecycleStage.STOP)
-  def stop()
-  {
+  def stop() {
     this.running = false
     executor.shutdown
   }
@@ -75,14 +80,13 @@ class TwistrClient @Inject() (config: TwistrConfig, objectMapper: ObjectMapper) 
       r.close
     }
 
-  override def run()
-  {
+  override def run() {
     val client = new OkHttpClient
     val producer = new Producer[Long, String](producerConfig)
 
     while (running) {
       try {
-        val connection = client .open(new URL("https://stream.twitter.com/1.1/statuses/sample.json"))
+        val connection = client.open(new URL("https://stream.twitter.com/1.1/statuses/sample.json"))
         consumer.sign(connection)
         connection.connect
 
@@ -96,20 +100,19 @@ class TwistrClient @Inject() (config: TwistrConfig, objectMapper: ObjectMapper) 
     }
   }
 
-  def processStream(reader: BufferedReader, producer: Producer[Long, String])
-  {
+  def processStream(reader: BufferedReader, producer: Producer[Long, String]) {
     var count = 0
     while (count < MAX_TWEETS) {
       val msg = reader.readLine
       val tree = objectMapper.readTree(msg)
 
       if (tree.has("delete")) {
-        val id = tree.at("/delete/status/id").longValue;
-        val keyedMessage = new KeyedMessage("twitter_deletes", id, msg)
-        producer.send(keyedMessage)
+        val id = tree.path("delete").path("status").path("id").longValue
+        val message = new KeyedMessage("twitter_deletes", id, msg)
+        producer.send(message)
       }
       else {
-        val id = tree.at("/id").longValue
+        val id = tree.path("id").longValue
 
         if (filter.mightContain(id)) {
           LOG.warn("Tweet " + id + " was already sent in!")
@@ -117,8 +120,8 @@ class TwistrClient @Inject() (config: TwistrConfig, objectMapper: ObjectMapper) 
         }
         else {
           filter.put(id)
-          val keyedMessage = new KeyedMessage("twitter_feed", id, msg)
-          producer.send(keyedMessage)
+          val message = new KeyedMessage("twitter_feed", id, msg)
+          producer.send(message)
           count = count + 1
           if (count % 1000 == 0) {
             LOG.info("Tweet count: " + count)
