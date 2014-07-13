@@ -26,7 +26,7 @@
     <artifactId>twistr_kafka_072</artifactId>
     <packaging>jar</packaging>
 
-    <version>1.1</version>
+    <version>1.2-SNAPSHOT</version>
     <name>TWItter STReamer</name>
 
     <properties>
@@ -276,8 +276,4 @@
             </build>
         </profile>
     </profiles>
-
-  <scm>
-    <tag>twistr_kafka_072-1.1</tag>
-  </scm>
 </project>
